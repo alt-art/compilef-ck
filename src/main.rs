@@ -40,7 +40,7 @@ fn create_loop_targets(instructions_str: &str) -> AHashMap<usize, usize> {
             ']' => {
                 let loop_index = loop_stack
                     .pop()
-                    .expect(format!("Unmatched ']' at index: {}", index).as_str());
+                    .unwrap_or_else(|| panic!("Unmatched loop end at index {}", index));
                 targets.insert(loop_index, index);
                 targets.insert(index, loop_index);
             }
@@ -62,10 +62,10 @@ fn parse_instructions(instructions_str: &str) -> Vec<Instruction> {
             '.' => instructions.push(Instruction::Output),
             ',' => instructions.push(Instruction::Input),
             '[' => instructions.push(Instruction::LoopStart(
-                loop_targets.get(&index).expect("Unmatched '['").clone(),
+                *loop_targets.get(&index).unwrap_or_else(|| panic!("Unmatched '[' at index: {}", index)),
             )),
             ']' => instructions.push(Instruction::LoopEnd(
-                loop_targets.get(&index).unwrap().clone(),
+                *loop_targets.get(&index).unwrap(),
             )),
             _ => {}
         }
