@@ -37,7 +37,7 @@ fn main() -> Result<()> {
             let mut contents = String::new();
             let mut buffer = BufReader::new(file);
             buffer.read_to_string(&mut contents)?;
-            let instructions = parse_instructions(&contents);
+            let instructions = parse_instructions(&contents)?;
             execute(&instructions);
         }
         Opt::Compile { file } => {
@@ -45,7 +45,7 @@ fn main() -> Result<()> {
             let mut contents = String::new();
             let mut buffer = BufReader::new(file);
             buffer.read_to_string(&mut contents)?;
-            let instructions = parse_instructions(&contents);
+            let instructions = parse_instructions(&contents)?;
             yasm_x86_64_compiler(&instructions)?;
         }
     }

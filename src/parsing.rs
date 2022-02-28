@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use anyhow::{anyhow, Result};
 
 #[derive(Debug)]
 pub enum Instruction {
@@ -29,7 +30,7 @@ fn lexer(contents: &str) -> Vec<Token> {
     result
 }
 
-fn create_loop_targets(tokens: &[Token]) -> AHashMap<usize, usize> {
+fn create_loop_targets(tokens: &[Token]) -> Result<AHashMap<usize, usize>> {
     let mut loop_stack = Vec::new();
     let mut targets = AHashMap::new();
     for (index, instruction) in tokens.iter().enumerate() {
@@ -38,22 +39,22 @@ fn create_loop_targets(tokens: &[Token]) -> AHashMap<usize, usize> {
                 loop_stack.push(index);
             }
             (']', location) => {
-                let loop_index = loop_stack.pop().unwrap_or_else(|| {
-                    panic!("Unmatched loop end at index {}:{}", location.0, location.1)
-                });
+                let loop_index = loop_stack.pop().ok_or_else(|| {
+                    anyhow!("Unmatched ']' at index {}:{}", location.0, location.1)
+                })?;
                 targets.insert(loop_index, index);
                 targets.insert(index, loop_index);
             }
             _ => {}
         }
     }
-    targets
+    Ok(targets)
 }
 
-pub fn parse_instructions(instructions_str: &str) -> Vec<Instruction> {
+pub fn parse_instructions(instructions_str: &str) -> Result<Vec<Instruction>> {
     let mut instructions = Vec::new();
     let tokens = lexer(instructions_str);
-    let loop_targets = create_loop_targets(&tokens);
+    let loop_targets = create_loop_targets(&tokens)?;
     for (index, instruction_char) in tokens.iter().enumerate() {
         match instruction_char {
             ('>', _) => instructions.push(Instruction::IncrementPointer),
@@ -63,13 +64,13 @@ pub fn parse_instructions(instructions_str: &str) -> Vec<Instruction> {
             ('.', _) => instructions.push(Instruction::Output),
             (',', _) => instructions.push(Instruction::Input),
             ('[', location) => instructions.push(Instruction::LoopStart(
-                *loop_targets.get(&index).unwrap_or_else(|| {
-                    panic!("Unmatched '[' at index: {}:{}", location.0, location.1)
-                }),
+                *loop_targets.get(&index).ok_or_else(|| {
+                    anyhow!("Unmatched '[' at index {}:{}", location.0, location.1)
+                })?,
             )),
             (']', _) => instructions.push(Instruction::LoopEnd(*loop_targets.get(&index).unwrap())),
             _ => {}
         }
     }
-    instructions
+    Ok(instructions)
 }
