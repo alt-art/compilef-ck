@@ -1,6 +1,8 @@
+mod compiler;
 mod interpreter;
 mod parsing;
 
+use compiler::yasm_x86_64_compiler;
 use interpreter::execute;
 use parsing::parse_instructions;
 
@@ -20,6 +22,11 @@ enum Opt {
         /// The brainfuck file to interpret
         file: PathBuf,
     },
+    /// Compiles the brainfuck program in the given file
+    Compile {
+        /// The brainfuck file to compile
+        file: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -32,6 +39,14 @@ fn main() -> Result<()> {
             buffer.read_to_string(&mut contents)?;
             let instructions = parse_instructions(&contents);
             execute(&instructions);
+        }
+        Opt::Compile { file } => {
+            let file = File::open(file)?;
+            let mut contents = String::new();
+            let mut buffer = BufReader::new(file);
+            buffer.read_to_string(&mut contents)?;
+            let instructions = parse_instructions(&contents);
+            yasm_x86_64_compiler(&instructions)?;
         }
     }
     Ok(())
