@@ -1,9 +1,13 @@
 [package]
 name = "compilefuck"
+description = "Compilefuck is a brainfuck compiler/interpreter written in Rust."
 version = "0.1.0"
+authors = ["Pedro H. M. <pedromendescraft@gmail.com>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 ahash = "0.7.6"
+anyhow = "1.0.55"
+clap = { version = "3.1.2", features = ["derive"] }
