@@ -1,3 +1,16 @@
+#![warn(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo,
+    clippy::str_to_string
+)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+
 mod compiler;
 mod interpreter;
 mod parsing;

@@ -42,7 +42,7 @@ pub fn execute(instructions: &[Instruction]) {
                 print!("{}", memory[pointer] as u8 as char);
             }
             Instruction::Input => {
-                memory[pointer] = get_char() as isize;
+                memory[pointer] = isize::from(get_char());
             }
             Instruction::LoopStart(target) => {
                 if memory[pointer] == 0 {
