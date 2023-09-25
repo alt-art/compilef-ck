@@ -23,8 +23,14 @@ fn generate_yasm_x86_64_header(file: &mut File) -> Result<()> {
         file,
         "\tdebug_memory: db \"memory: %ld\", 10, \"--- DEBUG ---\", 10, 0"
     )?;
-    writeln!(file, "overflow_message: db 27, \"[1;31mERROR: overflow exception\", 27, \"[0m\", 10, 0")?;
-    writeln!(file, "underflow_message: db 27, \"[1;31mERROR: underflow exeption\", 27, \"[0m\", 10, 0")?;
+    writeln!(
+        file,
+        "overflow_message: db 27, \"[1;31mERROR: overflow exception\", 27, \"[0m\", 10, 0"
+    )?;
+    writeln!(
+        file,
+        "underflow_message: db 27, \"[1;31mERROR: underflow exeption\", 27, \"[0m\", 10, 0"
+    )?;
     writeln!(file, "\tpointer: dd 15000")?;
     writeln!(file, "segment .bss")?;
     writeln!(file, "\tarray: resb 240000")?;
