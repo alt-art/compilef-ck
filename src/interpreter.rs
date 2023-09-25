@@ -14,8 +14,8 @@ fn get_char() -> u8 {
 }
 
 pub fn execute(instructions: &[Instruction]) {
-    let mut memory = [0; 30000];
-    let mut pointer = 0;
+    let mut memory: [u8; 30000] = [0; 30000];
+    let mut pointer = memory.len() / 2;
     let mut index = 0;
     while index < instructions.len() {
         match instructions[index] {
@@ -33,26 +33,41 @@ pub fn execute(instructions: &[Instruction]) {
                 }
             }
             Instruction::IncrementValue => {
-                memory[pointer] += 1;
+                if memory[pointer] == 255 {
+                    memory[pointer] = 0;
+                } else {
+                    memory[pointer] += 1;
+                }
             }
             Instruction::DecrementValue => {
-                memory[pointer] -= 1;
+                if memory[pointer] == 0 {
+                    memory[pointer] = 255;
+                } else {
+                    memory[pointer] -= 1;
+                }
             }
             Instruction::Output => {
-                print!("{}", memory[pointer] as u8 as char);
+                print!("{}", memory[pointer] as char);
             }
             Instruction::Input => {
-                memory[pointer] = isize::from(get_char());
+                memory[pointer] = get_char();
             }
             Instruction::LoopStart(target) => {
                 if memory[pointer] == 0 {
-                    index = target;
+                    index = target - 1;
                 }
             }
             Instruction::LoopEnd(target) => {
                 if memory[pointer] != 0 {
-                    index = target;
+                    index = target - 1;
                 }
+            }
+            Instruction::Debug => {
+                println!();
+                println!("--- DEBUG ---");
+                println!("pointer: {pointer}");
+                println!("memory: {}", memory[pointer]);
+                println!("--- DEBUG ---");
             }
         }
         index += 1;

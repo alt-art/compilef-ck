@@ -9,6 +9,7 @@ pub enum Instruction {
     DecrementValue,
     Output,
     Input,
+    Debug,
     LoopStart(usize),
     LoopEnd(usize),
 }
@@ -20,7 +21,7 @@ fn lexer(contents: &str) -> Vec<Token> {
     for (line_index, line) in contents.lines().enumerate() {
         for (char_index, content) in line.chars().enumerate() {
             match content {
-                '>' | '<' | '+' | '-' | '.' | ',' | '[' | ']' => {
+                '>' | '<' | '+' | '-' | '.' | ',' | '[' | ']' | '%' => {
                     result.push((content, (line_index + 1, char_index + 1)));
                 }
                 _ => {}
@@ -63,6 +64,7 @@ pub fn parse_instructions(instructions_str: &str) -> Result<Vec<Instruction>> {
             ('-', _) => instructions.push(Instruction::DecrementValue),
             ('.', _) => instructions.push(Instruction::Output),
             (',', _) => instructions.push(Instruction::Input),
+            ('%', _) => instructions.push(Instruction::Debug),
             ('[', location) => instructions.push(Instruction::LoopStart(
                 *loop_targets.get(&index).ok_or_else(|| {
                     anyhow!("Unmatched '[' at index {}:{}", location.0, location.1)

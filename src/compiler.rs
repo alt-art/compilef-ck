@@ -13,61 +13,114 @@ fn generate_yasm_x86_64_header(file: &mut File) -> Result<()> {
     writeln!(file, "extern exit")?;
     writeln!(file, "extern putchar")?;
     writeln!(file, "extern getchar")?;
+    writeln!(file, "extern printf")?;
     writeln!(file, "segment .data")?;
-    writeln!(file, "\tarray: times 30000 dq 0")?;
+    writeln!(
+        file,
+        "\tdebug_pointer: db 10, \"--- DEBUG ---\", 10, \"pointer: %ld\", 10, 0"
+    )?;
+    writeln!(
+        file,
+        "\tdebug_memory: db \"memory: %ld\", 10, \"--- DEBUG ---\", 10, 0"
+    )?;
+    writeln!(file, "overflow_message: db 27, \"[1;31mERROR: overflow exception\", 27, \"[0m\", 10, 0")?;
+    writeln!(file, "underflow_message: db 27, \"[1;31mERROR: underflow exeption\", 27, \"[0m\", 10, 0")?;
+    writeln!(file, "\tpointer: dd 15000")?;
+    writeln!(file, "segment .bss")?;
+    writeln!(file, "\tarray: resb 240000")?;
     writeln!(file, "segment .text")?;
     writeln!(file, "\tglobal _start")?;
     writeln!(file, "_start:")?;
-    writeln!(file, "\tmov rbp, 0")?;
     Ok(())
 }
 
 fn generate_yasm_x86_64_code(instructions: &[Instruction], file: &mut File) -> Result<()> {
     writeln!(file, "; --- BODY ---")?;
     for (index, instruction) in instructions.iter().enumerate() {
-        writeln!(file, "addr_{}:", index)?;
+        writeln!(file, "addr_{index}:")?;
         match instruction {
             Instruction::IncrementPointer => {
                 writeln!(file, "\t; --- Increment pointer ---")?;
-                writeln!(file, "\tadd rbp, 1 ; rbp += 1")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tadd ebx, 1 ; ebx += 1")?;
+                writeln!(file, "\tmov [pointer], ebx ; pointer = ebx")?;
+                writeln!(file, "\tcmp ebx, 30000")?;
+                writeln!(file, "\tjge exception_overflow")?;
             }
             Instruction::DecrementPointer => {
                 writeln!(file, "\t; --- Decrement pointer ---")?;
-                writeln!(file, "\tsub rbp, 1 ; rbp -= 1")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tsub ebx, 1 ; ebx -= 1")?;
+                writeln!(file, "\tmov [pointer], ebx ; pointer = ebx")?;
+                writeln!(file, "\tcmp ebx, 0")?;
+                writeln!(file, "\tjl exception_underflow")?;
             }
             Instruction::Output => {
                 writeln!(file, "\t; --- Output ---")?;
-                writeln!(file, "\tmov rdi, [array + rbp * 8] ; rdi = array[rbp]")?;
-                writeln!(file, "\tcall putchar ; putchar(rdi)")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tmov edi, [array + ebx * 8] ; edi = array[pointer]")?;
+                writeln!(file, "\tcall putchar ; putchar(edi)")?;
             }
             Instruction::Input => {
                 writeln!(file, "\t; --- Input ---")?;
-                writeln!(file, "\tcall getchar ; rax = getchar()")?;
-                writeln!(file, "\tmov [array + rbp * 8], rax ; array[rbp] = rax")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tcall getchar ; eax = getchar()")?;
+                writeln!(file, "\tmov [array + ebx * 8], eax ; array[pointer] = eax")?;
             }
             Instruction::IncrementValue => {
                 writeln!(file, "\t; --- Increment value ---")?;
-                writeln!(file, "\tmov rax, [array + rbp * 8] ; rax = array[rbp]")?;
-                writeln!(file, "\tadd rax, 1 ; rax += 1")?;
-                writeln!(file, "\tmov [array + rbp * 8], rax ; array[rbp] = rax")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tmov eax, [array + ebx * 8] ; eax = array[pointer]")?;
+                writeln!(file, "\tcmp eax, 255")?;
+                writeln!(file, "\tjge .clear")?;
+                writeln!(file, "\tadd eax, 1 ; eax += 1")?;
+                writeln!(file, "\tmov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                writeln!(file, "\tjmp .end")?;
+                writeln!(file, ".clear:")?;
+                writeln!(file, "\tmov eax, 0; eax = 0")?;
+                writeln!(file, "\tmov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                writeln!(file, ".end:")?;
             }
             Instruction::DecrementValue => {
                 writeln!(file, "\t; --- Decrement value ---")?;
-                writeln!(file, "\tmov rax, [array + rbp * 8] ; rax = array[rbp]")?;
-                writeln!(file, "\tsub rax, 1 ; rax -= 1")?;
-                writeln!(file, "\tmov [array + rbp * 8], rax ; array[rbp] = rax")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tmov eax, [array + ebx * 8] ; eax = array[pointer]")?;
+                writeln!(file, "\tcmp eax, 0")?;
+                writeln!(file, "\tjle .clear")?;
+                writeln!(file, "\tsub eax, 1 ; eax -= 1")?;
+                writeln!(file, "\tmov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                writeln!(file, "\tjmp .end")?;
+                writeln!(file, ".clear:")?;
+                writeln!(file, "\tmov eax, 255; eax = 255")?;
+                writeln!(file, "\tmov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                writeln!(file, ".end:")?;
             }
             Instruction::LoopStart(target) => {
                 writeln!(file, "\t; --- Loop start ---")?;
-                writeln!(file, "\tmov rax, [array + rbp * 8] ; rax = array[rbp]")?;
-                writeln!(file, "\tcmp rax, 0")?;
-                writeln!(file, "\tje addr_{}", target)?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tmov eax, [array + ebx * 8] ; eax = array[pointer]")?;
+                writeln!(file, "\tcmp eax, 0")?;
+                writeln!(file, "\tje addr_{target}")?;
             }
             Instruction::LoopEnd(target) => {
                 writeln!(file, "\t; --- Loop end ---")?;
-                writeln!(file, "\tmov rax, [array + rbp * 8] ; rax = array[rbp]")?;
-                writeln!(file, "\tcmp rax, 0")?;
-                writeln!(file, "\tjne addr_{}", target)?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tmov eax, [array + ebx * 8] ; eax = array[pointer]")?;
+                writeln!(file, "\tcmp eax, 0")?;
+                writeln!(file, "\tjne addr_{target}")?;
+            }
+            Instruction::Debug => {
+                writeln!(file, "\t; --- Debug ---")?;
+                writeln!(file, "\tlea edi, [debug_pointer]")?;
+                writeln!(file, "\tmov esi, ebx")?;
+                writeln!(file, "\txor eax, eax")?;
+                writeln!(file, "\tcall printf")?;
+                writeln!(file, "\txor eax, eax")?;
+                writeln!(file, "\tmov ebx, [pointer] ; ebx = pointer")?;
+                writeln!(file, "\tmov esi, [array + ebx * 8] ; eax = array[pointer]")?;
+                writeln!(file, "\tlea edi, [debug_memory]")?;
+                writeln!(file, "\txor eax, eax")?;
+                writeln!(file, "\tcall printf")?;
             }
         }
     }
@@ -76,7 +129,19 @@ fn generate_yasm_x86_64_code(instructions: &[Instruction], file: &mut File) -> R
 
 fn generate_yasm_x86_64_footer(file: &mut File) -> Result<()> {
     writeln!(file, "\t; --- EXIT ---")?;
-    writeln!(file, "\tmov rdi, 0")?;
+    writeln!(file, "\tmov edi, 0")?;
+    writeln!(file, "\tcall exit")?;
+    writeln!(file, "exception_overflow:")?;
+    writeln!(file, "\tmov edi, overflow_message")?;
+    writeln!(file, "\txor eax, eax")?;
+    writeln!(file, "\tcall printf")?;
+    writeln!(file, "\tmov edi, 1")?;
+    writeln!(file, "\tcall exit")?;
+    writeln!(file, "exception_underflow:")?;
+    writeln!(file, "\tmov edi, underflow_message")?;
+    writeln!(file, "\txor eax, eax")?;
+    writeln!(file, "\tcall printf")?;
+    writeln!(file, "\tmov edi, 1")?;
     writeln!(file, "\tcall exit")?;
     Ok(())
 }
@@ -87,7 +152,7 @@ pub fn yasm_x86_64_compiler(instructions: &[Instruction]) -> Result<()> {
     generate_yasm_x86_64_code(instructions, &mut file)?;
     generate_yasm_x86_64_footer(&mut file)?;
     let output = Command::new("yasm")
-        .args(&["-f", "elf64", "-o", "/tmp/out.o", "/tmp/out.s"])
+        .args(["-f", "elf64", "-o", "/tmp/out.o", "/tmp/out.s"])
         .output();
     match output {
         Ok(output) => {
@@ -101,7 +166,7 @@ pub fn yasm_x86_64_compiler(instructions: &[Instruction]) -> Result<()> {
             let path = std::env::current_dir()?.join("out");
             let path_str = path.to_str().unwrap();
             let output = Command::new("ld")
-                .args(&[
+                .args([
                     "--dynamic-linker",
                     "/lib64/ld-linux-x86-64.so.2",
                     "-o",
@@ -124,6 +189,6 @@ pub fn yasm_x86_64_compiler(instructions: &[Instruction]) -> Result<()> {
             }
             Ok(())
         }
-        Err(error) => return Err(anyhow!("yasm failed with error: {}", error)),
+        Err(error) => Err(anyhow!("yasm failed with error: {}", error)),
     }
 }
