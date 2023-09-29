@@ -15,7 +15,7 @@ mod compiler;
 mod interpreter;
 mod parsing;
 
-use compiler::yasm_x86_64_compiler;
+use compiler::yasm_x86_64_linux_compiler;
 use interpreter::execute;
 use parsing::parse_instructions;
 
@@ -68,7 +68,7 @@ fn main() -> Result<()> {
             } else {
                 current_dir()?.join(file.file_stem().expect("File name not found"))
             };
-            yasm_x86_64_compiler(&instructions, &output)?;
+            yasm_x86_64_linux_compiler(&instructions, &output)?;
         }
     }
     Ok(())
