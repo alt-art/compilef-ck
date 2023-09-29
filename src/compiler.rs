@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::process::Command;
 
 macro_rules! write_tab {
@@ -51,18 +52,18 @@ fn generate_yasm_x86_64_code(instructions: &[Instruction], file: &mut File) -> R
     for (index, instruction) in instructions.iter().enumerate() {
         writeln!(file, "addr_{index}:")?;
         match instruction {
-            Instruction::IncrementPointer => {
+            Instruction::IncrementPointer(value) => {
                 write_tab!(file, "; --- Increment pointer ---")?;
                 write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "add ebx, 1 ; ebx += 1")?;
+                write_tab!(file, "add ebx, {value} ; ebx += {value}")?;
                 write_tab!(file, "mov [pointer], ebx ; pointer = ebx")?;
                 write_tab!(file, "cmp ebx, 30000")?;
                 write_tab!(file, "jge exception_overflow")?;
             }
-            Instruction::DecrementPointer => {
+            Instruction::DecrementPointer(value) => {
                 write_tab!(file, "; --- Decrement pointer ---")?;
                 write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "sub ebx, 1 ; ebx -= 1")?;
+                write_tab!(file, "sub ebx, {value} ; ebx -= {value}")?;
                 write_tab!(file, "mov [pointer], ebx ; pointer = ebx")?;
                 write_tab!(file, "cmp ebx, 0")?;
                 write_tab!(file, "jl exception_underflow")?;
@@ -79,42 +80,46 @@ fn generate_yasm_x86_64_code(instructions: &[Instruction], file: &mut File) -> R
                 write_tab!(file, "call getchar ; eax = getchar()")?;
                 write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
             }
-            Instruction::IncrementValue => {
+            Instruction::IncrementValue(value) => {
                 write_tab!(file, "; --- Increment value ---")?;
                 write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
                 write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
+                write_tab!(file, "add eax, {value} ; eax += {value}")?;
                 write_tab!(file, "cmp eax, 255")?;
-                write_tab!(file, "jge .clear")?;
-                write_tab!(file, "add eax, 1 ; eax += 1")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "jg .clear")?;
                 write_tab!(file, "jmp .end")?;
                 writeln!(file, ".clear:")?;
-                write_tab!(file, "mov eax, 0; eax = 0")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "and eax, 255 ; eax &= 255")?;
                 writeln!(file, ".end:")?;
+                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
             }
-            Instruction::DecrementValue => {
+            Instruction::DecrementValue(value) => {
                 write_tab!(file, "; --- Decrement value ---")?;
                 write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
                 write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
-                write_tab!(file, "cmp eax, 0")?;
-                write_tab!(file, "jle .clear")?;
-                write_tab!(file, "sub eax, 1 ; eax -= 1")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "sub eax, {value} ; eax -= {value}")?;
+                write_tab!(file, "test eax, eax")?;
+                write_tab!(file, "js .clear")?;
                 write_tab!(file, "jmp .end")?;
                 writeln!(file, ".clear:")?;
-                write_tab!(file, "mov eax, 255; eax = 255")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "and eax, 255 ; eax &= 255")?;
                 writeln!(file, ".end:")?;
+                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
             }
-            Instruction::LoopStart(target) => {
+            Instruction::LoopStart {
+                target: Some(target),
+                ..
+            } => {
                 write_tab!(file, "; --- Loop start ---")?;
                 write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
                 write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
                 write_tab!(file, "cmp eax, 0")?;
                 write_tab!(file, "je addr_{target}")?;
             }
-            Instruction::LoopEnd(target) => {
+            Instruction::LoopEnd {
+                target: Some(target),
+                ..
+            } => {
                 write_tab!(file, "; --- Loop end ---")?;
                 write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
                 write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
@@ -133,6 +138,9 @@ fn generate_yasm_x86_64_code(instructions: &[Instruction], file: &mut File) -> R
                 write_tab!(file, "lea edi, [debug_memory]")?;
                 write_tab!(file, "xor eax, eax")?;
                 write_tab!(file, "call printf")?;
+            }
+            Instruction::LoopStart { .. } | Instruction::LoopEnd { .. } => {
+                unreachable!("LoopStart and LoopEnd should have a target");
             }
         }
     }
@@ -158,7 +166,7 @@ fn generate_yasm_x86_64_footer(file: &mut File) -> Result<()> {
     Ok(())
 }
 
-pub fn yasm_x86_64_compiler(instructions: &[Instruction]) -> Result<()> {
+pub fn yasm_x86_64_compiler(instructions: &[Instruction], output_file: &Path) -> Result<()> {
     let mut file = File::create("/tmp/out.s")?;
     generate_yasm_x86_64_header(&mut file)?;
     generate_yasm_x86_64_code(instructions, &mut file)?;
@@ -171,12 +179,11 @@ pub fn yasm_x86_64_compiler(instructions: &[Instruction]) -> Result<()> {
             if !output.status.success() {
                 return Err(anyhow!(
                     "yasm failed with exit code {}\n{}",
-                    output.status.code().unwrap(),
+                    output.status.code().expect("Invalid exit code"),
                     String::from_utf8_lossy(&output.stderr)
                 ));
             }
-            let path = std::env::current_dir()?.join("out");
-            let path_str = path.to_str().unwrap();
+            let path_str = output_file.to_str().expect("Invalid path");
             let output = Command::new("ld")
                 .args([
                     "--dynamic-linker",
@@ -192,7 +199,7 @@ pub fn yasm_x86_64_compiler(instructions: &[Instruction]) -> Result<()> {
                     if !output.status.success() {
                         return Err(anyhow!(
                             "ld failed with exit code {}\n{}",
-                            output.status.code().unwrap(),
+                            output.status.code().expect("Invalid exit code"),
                             String::from_utf8_lossy(&output.stderr)
                         ));
                     }

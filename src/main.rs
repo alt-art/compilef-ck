@@ -20,16 +20,12 @@ use interpreter::execute;
 use parsing::parse_instructions;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufReader;
-use std::path::PathBuf;
+use std::{env::current_dir, path::PathBuf};
 
-#[derive(Parser)]
-#[clap(about, author, version)]
-enum Opt {
+#[derive(Subcommand, Clone)]
+enum Mode {
     /// Interprets the brainfuck program in the given file
     Interpret {
         /// The brainfuck file to interpret
@@ -39,27 +35,40 @@ enum Opt {
     Compile {
         /// The brainfuck file to compile
         file: PathBuf,
+        /// Output location of binary file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
+}
+
+#[derive(Parser, Clone)]
+#[clap(about, author, version)]
+struct Opt {
+    #[command(subcommand)]
+    mode: Mode,
+    #[arg(short, long)]
+    /// Activate the debug command `%` that shows current value of the pointer and current memory position value
+    debug: bool,
+    #[arg(short, long)]
+    /// Optimize the code by grouping decrement/increment instructions in one single instruction
+    optimize: bool,
 }
 
 fn main() -> Result<()> {
     let opt = Opt::parse();
-    match opt {
-        Opt::Interpret { file } => {
-            let file = File::open(file)?;
-            let mut contents = String::new();
-            let mut buffer = BufReader::new(file);
-            buffer.read_to_string(&mut contents)?;
-            let instructions = parse_instructions(&contents)?;
-            execute(&instructions);
+    match opt.mode {
+        Mode::Interpret { file } => {
+            let instructions = parse_instructions(&file, opt.debug, opt.optimize)?;
+            execute(&instructions)?;
         }
-        Opt::Compile { file } => {
-            let file = File::open(file)?;
-            let mut contents = String::new();
-            let mut buffer = BufReader::new(file);
-            buffer.read_to_string(&mut contents)?;
-            let instructions = parse_instructions(&contents)?;
-            yasm_x86_64_compiler(&instructions)?;
+        Mode::Compile { file, output } => {
+            let instructions = parse_instructions(&file, opt.debug, opt.optimize)?;
+            let output = if let Some(output) = output {
+                output
+            } else {
+                current_dir()?.join(file.file_stem().expect("File name not found"))
+            };
+            yasm_x86_64_compiler(&instructions, &output)?;
         }
     }
     Ok(())

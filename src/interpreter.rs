@@ -1,6 +1,8 @@
 use std::io;
 use std::io::prelude::*;
 
+use anyhow::Result;
+
 use crate::parsing::Instruction;
 
 fn get_char() -> u8 {
@@ -13,38 +15,30 @@ fn get_char() -> u8 {
     }
 }
 
-pub fn execute(instructions: &[Instruction]) {
+pub fn execute(instructions: &[Instruction]) -> Result<()> {
     let mut memory: [u8; 30000] = [0; 30000];
     let mut pointer = memory.len() / 2;
     let mut index = 0;
     while index < instructions.len() {
         match instructions[index] {
-            Instruction::IncrementPointer => {
-                pointer += 1;
-                if pointer >= memory.len() {
-                    pointer = 0;
+            Instruction::IncrementPointer(value) => {
+                let increment = pointer + value;
+                if increment > memory.len() - 1 {
+                    anyhow::bail!("Pointer overflow");
                 }
+                pointer = increment;
             }
-            Instruction::DecrementPointer => {
-                if pointer == 0 {
-                    pointer = memory.len() - 1;
-                } else {
-                    pointer -= 1;
+            Instruction::DecrementPointer(value) => {
+                if pointer < value {
+                    anyhow::bail!("Pointer underflow");
                 }
+                pointer -= value;
             }
-            Instruction::IncrementValue => {
-                if memory[pointer] == 255 {
-                    memory[pointer] = 0;
-                } else {
-                    memory[pointer] += 1;
-                }
+            Instruction::IncrementValue(value) => {
+                memory[pointer] = memory[pointer].wrapping_add(value as u8);
             }
-            Instruction::DecrementValue => {
-                if memory[pointer] == 0 {
-                    memory[pointer] = 255;
-                } else {
-                    memory[pointer] -= 1;
-                }
+            Instruction::DecrementValue(value) => {
+                memory[pointer] = memory[pointer].wrapping_sub(value as u8);
             }
             Instruction::Output => {
                 print!("{}", memory[pointer] as char);
@@ -52,12 +46,18 @@ pub fn execute(instructions: &[Instruction]) {
             Instruction::Input => {
                 memory[pointer] = get_char();
             }
-            Instruction::LoopStart(target) => {
+            Instruction::LoopStart {
+                target: Some(target),
+                ..
+            } => {
                 if memory[pointer] == 0 {
                     index = target - 1;
                 }
             }
-            Instruction::LoopEnd(target) => {
+            Instruction::LoopEnd {
+                target: Some(target),
+                ..
+            } => {
                 if memory[pointer] != 0 {
                     index = target - 1;
                 }
@@ -69,7 +69,11 @@ pub fn execute(instructions: &[Instruction]) {
                 println!("memory: {}", memory[pointer]);
                 println!("--- DEBUG ---");
             }
+            Instruction::LoopStart { .. } | Instruction::LoopEnd { .. } => {
+                unreachable!("LoopStart and LoopEnd should have a target");
+            }
         }
         index += 1;
     }
+    Ok(())
 }
