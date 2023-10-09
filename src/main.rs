@@ -11,6 +11,10 @@
     clippy::cast_sign_loss
 )]
 
+#[cfg(target_os = "linux")]
+#[cfg(test)]
+mod tests;
+
 mod compiler;
 mod interpreter;
 mod parsing;
