@@ -36,7 +36,7 @@ fn generate_yasm_x86_64_linux_header(file: &mut File) -> Result<()> {
     )?;
     writeln!(
         file,
-        "underflow_message: db 27, \"[1;31mERROR: underflow exeption\", 27, \"[0m\", 10, 0"
+        "underflow_message: db 27, \"[1;31mERROR: underflow exception\", 27, \"[0m\", 10, 0"
     )?;
     write_tab!(file, "pointer: dd 15000")?;
     writeln!(file, "segment .bss")?;
