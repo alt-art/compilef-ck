@@ -130,14 +130,14 @@ fn generate_yasm_x86_64_linux_code(instructions: &[Instruction], file: &mut File
             }
             Instruction::Debug => {
                 write_tab!(file, "; --- Debug ---")?;
-                write_tab!(file, "lea rdi, [debug_pointer]")?;
+                write_tab!(file, "lea rdi, [rel debug_pointer]")?;
                 write_tab!(file, "mov rsi, rbx")?;
                 write_tab!(file, "xor rax, rax")?;
                 write_tab!(file, "call printf")?;
                 write_tab!(file, "xor rax, rax")?;
                 write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
                 write_tab!(file, "mov rsi, [rbp + rbx * 8] ; rax = array[pointer]")?;
-                write_tab!(file, "lea rdi, [debug_memory]")?;
+                write_tab!(file, "lea rdi, [rel debug_memory]")?;
                 write_tab!(file, "xor rax, rax")?;
                 write_tab!(file, "call printf")?;
             }
