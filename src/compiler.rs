@@ -21,29 +21,31 @@ fn generate_yasm_x86_64_linux_header(file: &mut File) -> Result<()> {
     writeln!(file, "extern putchar")?;
     writeln!(file, "extern getchar")?;
     writeln!(file, "extern printf")?;
-    writeln!(file, "segment .data")?;
-    writeln!(
+    writeln!(file, "segment .rodata")?;
+    write_tab!(
         file,
         "\tdebug_pointer: db 10, \"--- DEBUG ---\", 10, \"pointer: %ld\", 10, 0"
     )?;
-    writeln!(
+    write_tab!(
         file,
         "\tdebug_memory: db \"memory: %ld\", 10, \"--- DEBUG ---\", 10, 0"
     )?;
-    writeln!(
+    write_tab!(
         file,
         "overflow_message: db 27, \"[1;31mERROR: overflow exception\", 27, \"[0m\", 10, 0"
     )?;
-    writeln!(
+    write_tab!(
         file,
         "underflow_message: db 27, \"[1;31mERROR: underflow exception\", 27, \"[0m\", 10, 0"
     )?;
-    write_tab!(file, "pointer: dd 15000")?;
+    writeln!(file, "segment .data")?;
+    write_tab!(file, "pointer: dq 15000")?;
     writeln!(file, "segment .bss")?;
     write_tab!(file, "array: resb 240000")?;
     writeln!(file, "segment .text")?;
     write_tab!(file, "global _start")?;
     writeln!(file, "_start:")?;
+    write_tab!(file, "lea rbp, [rel array]; rbp = array")?;
     Ok(())
 }
 
@@ -54,66 +56,66 @@ fn generate_yasm_x86_64_linux_code(instructions: &[Instruction], file: &mut File
         match instruction {
             Instruction::IncrementPointer(value) => {
                 write_tab!(file, "; --- Increment pointer ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "add ebx, {value} ; ebx += {value}")?;
-                write_tab!(file, "mov [pointer], ebx ; pointer = ebx")?;
-                write_tab!(file, "cmp ebx, 30000")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "add rbx, {value} ; rbx += {value}")?;
+                write_tab!(file, "mov [rel pointer], rbx ; pointer = rbx")?;
+                write_tab!(file, "cmp rbx, 30000")?;
                 write_tab!(file, "jge exception_overflow")?;
             }
             Instruction::DecrementPointer(value) => {
                 write_tab!(file, "; --- Decrement pointer ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "sub ebx, {value} ; ebx -= {value}")?;
-                write_tab!(file, "mov [pointer], ebx ; pointer = ebx")?;
-                write_tab!(file, "cmp ebx, 0")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "sub rbx, {value} ; rbx -= {value}")?;
+                write_tab!(file, "mov [rel pointer], rbx ; pointer = rbx")?;
+                write_tab!(file, "cmp rbx, 0")?;
                 write_tab!(file, "jl exception_underflow")?;
             }
             Instruction::Output => {
                 write_tab!(file, "; --- Output ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "mov edi, [array + ebx * 8] ; edi = array[pointer]")?;
-                write_tab!(file, "call putchar ; putchar(edi)")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "mov rdi, [rbp + rbx * 8] ; rdi = array[pointer]")?;
+                write_tab!(file, "call putchar ; putchar(rdi)")?;
             }
             Instruction::Input => {
                 write_tab!(file, "; --- Input ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "call getchar ; eax = getchar()")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "call getchar ; rax = getchar()")?;
+                write_tab!(file, "mov [rbp + rbx * 8], rax ; array[pointer] = rax")?;
             }
             Instruction::IncrementValue(value) => {
                 write_tab!(file, "; --- Increment value ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
-                write_tab!(file, "add eax, {value} ; eax += {value}")?;
-                write_tab!(file, "cmp eax, 255")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "mov rax, [rbp + rbx * 8] ; rax = array[pointer]")?;
+                write_tab!(file, "add rax, {value} ; rax += {value}")?;
+                write_tab!(file, "cmp rax, 255")?;
                 write_tab!(file, "jg .clear")?;
                 write_tab!(file, "jmp .end")?;
                 writeln!(file, ".clear:")?;
-                write_tab!(file, "and eax, 255 ; eax &= 255")?;
+                write_tab!(file, "and rax, 255 ; rax &= 255")?;
                 writeln!(file, ".end:")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "mov [rbp + rbx * 8], rax ; array[pointer] = rax")?;
             }
             Instruction::DecrementValue(value) => {
                 write_tab!(file, "; --- Decrement value ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
-                write_tab!(file, "sub eax, {value} ; eax -= {value}")?;
-                write_tab!(file, "test eax, eax")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "mov rax, [rbp + rbx * 8] ; rax = array[pointer]")?;
+                write_tab!(file, "sub rax, {value} ; rax -= {value}")?;
+                write_tab!(file, "test rax, rax")?;
                 write_tab!(file, "js .clear")?;
                 write_tab!(file, "jmp .end")?;
                 writeln!(file, ".clear:")?;
-                write_tab!(file, "and eax, 255 ; eax &= 255")?;
+                write_tab!(file, "and rax, 255 ; rax &= 255")?;
                 writeln!(file, ".end:")?;
-                write_tab!(file, "mov [array + ebx * 8], eax ; array[pointer] = eax")?;
+                write_tab!(file, "mov [rbp + rbx * 8], rax ; array[pointer] = rax")?;
             }
             Instruction::LoopStart {
                 target: Some(target),
                 ..
             } => {
                 write_tab!(file, "; --- Loop start ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
-                write_tab!(file, "cmp eax, 0")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "mov rax, [rbp + rbx * 8] ; rax = array[pointer]")?;
+                write_tab!(file, "cmp rax, 0")?;
                 write_tab!(file, "je addr_{target}")?;
             }
             Instruction::LoopEnd {
@@ -121,22 +123,22 @@ fn generate_yasm_x86_64_linux_code(instructions: &[Instruction], file: &mut File
                 ..
             } => {
                 write_tab!(file, "; --- Loop end ---")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "mov eax, [array + ebx * 8] ; eax = array[pointer]")?;
-                write_tab!(file, "cmp eax, 0")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "mov rax, [rbp + rbx * 8] ; rax = array[pointer]")?;
+                write_tab!(file, "cmp rax, 0")?;
                 write_tab!(file, "jne addr_{target}")?;
             }
             Instruction::Debug => {
                 write_tab!(file, "; --- Debug ---")?;
-                write_tab!(file, "lea edi, [debug_pointer]")?;
-                write_tab!(file, "mov esi, ebx")?;
-                write_tab!(file, "xor eax, eax")?;
+                write_tab!(file, "lea rdi, [debug_pointer]")?;
+                write_tab!(file, "mov rsi, rbx")?;
+                write_tab!(file, "xor rax, rax")?;
                 write_tab!(file, "call printf")?;
-                write_tab!(file, "xor eax, eax")?;
-                write_tab!(file, "mov ebx, [pointer] ; ebx = pointer")?;
-                write_tab!(file, "mov esi, [array + ebx * 8] ; eax = array[pointer]")?;
-                write_tab!(file, "lea edi, [debug_memory]")?;
-                write_tab!(file, "xor eax, eax")?;
+                write_tab!(file, "xor rax, rax")?;
+                write_tab!(file, "mov rbx, [rel pointer] ; rbx = pointer")?;
+                write_tab!(file, "mov rsi, [rbp + rbx * 8] ; rax = array[pointer]")?;
+                write_tab!(file, "lea rdi, [debug_memory]")?;
+                write_tab!(file, "xor rax, rax")?;
                 write_tab!(file, "call printf")?;
             }
             Instruction::LoopStart { .. } | Instruction::LoopEnd { .. } => {
@@ -149,19 +151,19 @@ fn generate_yasm_x86_64_linux_code(instructions: &[Instruction], file: &mut File
 
 fn generate_yasm_x86_64_linux_footer(file: &mut File) -> Result<()> {
     write_tab!(file, "; --- EXIT ---")?;
-    write_tab!(file, "mov edi, 0")?;
+    write_tab!(file, "mov rdi, 0")?;
     write_tab!(file, "call exit")?;
     writeln!(file, "exception_overflow:")?;
-    write_tab!(file, "mov edi, overflow_message")?;
-    write_tab!(file, "xor eax, eax")?;
+    write_tab!(file, "lea rdi, [rel overflow_message]")?;
+    write_tab!(file, "xor rax, rax")?;
     write_tab!(file, "call printf")?;
-    write_tab!(file, "mov edi, 1")?;
+    write_tab!(file, "mov rdi, 1")?;
     write_tab!(file, "call exit")?;
     writeln!(file, "exception_underflow:")?;
-    write_tab!(file, "mov edi, underflow_message")?;
-    write_tab!(file, "xor eax, eax")?;
+    write_tab!(file, "lea rdi, [rel underflow_message]")?;
+    write_tab!(file, "xor rax, rax")?;
     write_tab!(file, "call printf")?;
-    write_tab!(file, "mov edi, 1")?;
+    write_tab!(file, "mov rdi, 1")?;
     write_tab!(file, "call exit")?;
     Ok(())
 }
