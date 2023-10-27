@@ -24,9 +24,48 @@ use interpreter::execute;
 use parsing::parse_instructions;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
-use std::{env::current_dir, path::PathBuf};
+use std::{env::current_dir, fmt::Display, path::PathBuf};
+
+#[derive(Clone, ValueEnum)]
+pub enum TargetPlatform {
+    Linux,
+    Windows,
+}
+
+impl Display for TargetPlatform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Linux => write!(f, "linux"),
+            Self::Windows => write!(f, "windows"),
+        }
+    }
+}
+
+impl Default for TargetPlatform {
+    fn default() -> Self {
+        #[cfg(target_os = "windows")]
+        return Self::Windows;
+        #[cfg(target_os = "linux")]
+        return Self::Linux;
+    }
+}
+
+#[derive(Clone, ValueEnum)]
+enum TargetAsm {
+    Yasm,
+    Fasm,
+}
+
+impl Display for TargetAsm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Yasm => write!(f, "yasm"),
+            Self::Fasm => write!(f, "fasm"),
+        }
+    }
+}
 
 #[derive(Subcommand, Clone)]
 enum Mode {
@@ -42,6 +81,12 @@ enum Mode {
         /// Output location of binary file
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Target platform that you want to compile
+        #[arg(short, long, default_value_t=TargetPlatform::default())]
+        target: TargetPlatform,
+        /// Target assembler
+        #[arg(long, default_value_t=TargetAsm::Yasm)]
+        target_asembler: TargetAsm,
     },
 }
 
@@ -65,14 +110,24 @@ fn main() -> Result<()> {
             let instructions = parse_instructions(&file, opt.debug, opt.optimize)?;
             execute(&instructions)?;
         }
-        Mode::Compile { file, output } => {
+        Mode::Compile {
+            file,
+            output,
+            target,
+            target_asembler,
+        } => {
+            #[cfg(target_os = "windows")]
+            panic!("Cannot compile on windows only interpret");
             let instructions = parse_instructions(&file, opt.debug, opt.optimize)?;
             let output = if let Some(output) = output {
                 output
             } else {
                 current_dir()?.join(file.file_stem().expect("File name not found"))
             };
-            yasm_x86_64_linux_compiler(&instructions, &output)?;
+            match target_asembler {
+                TargetAsm::Yasm => yasm_x86_64_linux_compiler(&instructions, &output, &target)?,
+                TargetAsm::Fasm => todo!(),
+            }
         }
     }
     Ok(())

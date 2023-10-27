@@ -10,7 +10,7 @@ use std::process::{Command, Output, Stdio};
 fn compile_and_run(file: &PathBuf, input: &[u8]) -> Result<Output> {
     let instructions = parse_instructions(file, true, false)?;
     let output_path = current_dir()?.join(file.file_stem().expect("File name not found"));
-    yasm_x86_64_linux_compiler(&instructions, &output_path)?;
+    yasm_x86_64_linux_compiler(&instructions, &output_path, &TargetPlatform::Linux)?;
     let mut process = Command::new(&output_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
