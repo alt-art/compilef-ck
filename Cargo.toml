@@ -14,7 +14,7 @@ edition = "2021"
 [dependencies]
 ahash = "0.8.6"
 anyhow = "1.0.55"
-clap = { version = "4.4.6", features = ["derive"] }
+clap = { version = "4.4.7", features = ["derive"] }
 
 [dev-dependencies]
 serial_test = "2.0.0"
